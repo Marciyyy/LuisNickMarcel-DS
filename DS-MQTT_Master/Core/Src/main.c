@@ -22,13 +22,14 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "lwip/netif.h"
+#include "ampel_control.h"
+#include "ampel_output.h"
+#include "master_mqtt.h"
 #include "lwip/ip_addr.h"
-#include "ampel_mqtt.h"
-#include "heartbeat.h"
-#include "button.h"
-#include "sensor.h"
+#include "lwip/netif.h"
 #include <stdio.h>
+
+extern struct netif gnetif;
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -47,19 +48,23 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-ADC_HandleTypeDef hadc3;
-
 UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
-extern struct netif gnetif;
-char current_topic[64];
+
+// Benoetigt um das Board blinken zu lassen, falls idle
+static uint32_t last_blink = 0;
+
+uint8_t idleVorher;
+
+static uint8_t after_idle_pause_active = 0;
+static uint32_t after_idle_pause_start = 0;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_ADC3_Init(void);
 static void MX_USART3_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
@@ -100,65 +105,91 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_LWIP_Init();
-  MX_ADC3_Init();
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
+  printf("\n*** Master startet neu ***\n");
+
+  printf("Warte auf Ethernet-Link...\n");
   while (!netif_is_link_up(&gnetif))
   {
       MX_LWIP_Process();
   }
+  printf("Link up. Warte auf DHCP-IP...\n");
   while (netif_ip4_addr(&gnetif)->addr == 0)
   {
       MX_LWIP_Process();
   }
   printf("IP: %s\n", ip4addr_ntoa(netif_ip4_addr(&gnetif)));
 
-  Ampel_MQTT_Init();
+  MQTT_Init_Client();
 
-  lastHeartbeatMaster = HAL_GetTick();
-  lastHeartbeatB      = HAL_GetTick();
-  lastHeartbeatC      = HAL_GetTick();
+  lastHeartbeatA = HAL_GetTick();
+  lastHeartbeatB = HAL_GetTick();
+  lastHeartbeatC = HAL_GetTick();
+
+  idleVorher = idle;
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  static uint32_t last_blink = 0;
   while (1)
   {
-      MX_LWIP_Process();
-
-      Heartbeat_Send();
-      Heartbeat_Monitor();
-
-      Button_Update();
-      Sensor_Update();
-
-      if (idle || !mqtt_connected)
-      {
-          /* Notbetrieb: Fussgaengerampel aus */
-          HAL_GPIO_WritePin(GPIOD, GPIO_PIN_1, GPIO_PIN_RESET);  // Fuss gruen aus
-          HAL_GPIO_WritePin(GPIOG, GPIO_PIN_0, GPIO_PIN_RESET);  // Fuss rot aus
-
-
-          /* Hauptampel: gruen + rot aus, gelb blinken */
-          HAL_GPIO_WritePin(GPIOA, GPIO_PIN_3, GPIO_PIN_RESET);  // Haupt gruen aus
-          HAL_GPIO_WritePin(GPIOF, GPIO_PIN_3, GPIO_PIN_RESET);  // Haupt rot aus
-          HAL_GPIO_WritePin(GPIOG, GPIO_PIN_1, GPIO_PIN_RESET);  // Abbiege grün aus
-
-          if (HAL_GetTick() - last_blink >= 250)                 // ~2 Hz
-          {
-              last_blink = HAL_GetTick();
-              HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_0);             // Haupt gelb blinken
-          }
-      }
-      else
-      {
-          Sensor_Process();
-          Button_Process();
-      }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+      MX_LWIP_Process();
+      MQTT_Custom_Heartbeat();
+      MQTT_Monitor_Heartbeats();
+
+      process_publish_retries();
+
+      if (idleVorher && !idle)
+      {
+          // Dieser Code laeuft bei JEDEM Verlassen des Idle-Zustands
+          // Kompletter reset von allem:
+
+          Ampel_Reset_After_Idle();
+
+          after_idle_pause_start = HAL_GetTick();
+          after_idle_pause_active = 1;
+      }
+
+      // wenn idle zustand oder nicht mit MQTT Broker verbunden, dann orange blinken; GGF trennen und eine andere LED soll bei nicht connected blinken
+      if( idle || !mqtt_connected )
+      {
+         // Selbst Orange blinken
+        if (HAL_GetTick() - last_blink >= 250)   // alle 250 ms -> ~2 Hz Blinken
+        {
+            last_blink = HAL_GetTick();
+            HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_0);
+        }
+      }
+      else
+      {
+
+        // Nach Idle zunaechst warten, damit die Red-Publishes verarbeitet werden
+        if (after_idle_pause_active)
+        {
+            if (HAL_GetTick() - after_idle_pause_start >= AFTER_IDLE_PAUSE_MS)
+            {
+                after_idle_pause_active = 0;
+            }
+
+            // Solange die Pause aktiv ist:
+            // kein Ampel_zyklus() aufrufen.
+        }
+        else
+        {
+            Ampel_zyklus();
+        }
+
+        // Ampel_zyklus();
+
+      }
+
+      idleVorher = idle;
+
   }
   /* USER CODE END 3 */
 }
@@ -217,58 +248,6 @@ void SystemClock_Config(void)
 }
 
 /**
-  * @brief ADC3 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_ADC3_Init(void)
-{
-
-  /* USER CODE BEGIN ADC3_Init 0 */
-
-  /* USER CODE END ADC3_Init 0 */
-
-  ADC_ChannelConfTypeDef sConfig = {0};
-
-  /* USER CODE BEGIN ADC3_Init 1 */
-
-  /* USER CODE END ADC3_Init 1 */
-
-  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
-  */
-  hadc3.Instance = ADC3;
-  hadc3.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
-  hadc3.Init.Resolution = ADC_RESOLUTION_12B;
-  hadc3.Init.ScanConvMode = DISABLE;
-  hadc3.Init.ContinuousConvMode = DISABLE;
-  hadc3.Init.DiscontinuousConvMode = DISABLE;
-  hadc3.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
-  hadc3.Init.ExternalTrigConv = ADC_SOFTWARE_START;
-  hadc3.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-  hadc3.Init.NbrOfConversion = 1;
-  hadc3.Init.DMAContinuousRequests = DISABLE;
-  hadc3.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
-  if (HAL_ADC_Init(&hadc3) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
-  */
-  sConfig.Channel = ADC_CHANNEL_8;
-  sConfig.Rank = 1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_144CYCLES;
-  if (HAL_ADC_ConfigChannel(&hadc3, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN ADC3_Init 2 */
-
-  /* USER CODE END ADC3_Init 2 */
-
-}
-
-/**
   * @brief USART3 Initialization Function
   * @param None
   * @retval None
@@ -314,69 +293,22 @@ static void MX_GPIO_Init(void)
   /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOF_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOG_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
+  __HAL_RCC_GPIOG_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_3, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_3, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOG, GPIO_PIN_0|GPIO_PIN_1, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_1, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin : PF3 */
-  GPIO_InitStruct.Pin = GPIO_PIN_3;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : PF5 */
-  GPIO_InitStruct.Pin = GPIO_PIN_5;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
-  HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : PC0 */
+  /*Configure GPIO pin : PB0 */
   GPIO_InitStruct.Pin = GPIO_PIN_0;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : PA3 */
-  GPIO_InitStruct.Pin = GPIO_PIN_3;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : PG0 PG1 */
-  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : PD1 */
-  GPIO_InitStruct.Pin = GPIO_PIN_1;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 
@@ -394,6 +326,7 @@ int __io_putchar(int ch)
     HAL_UART_Transmit(&huart3, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
     return ch;
 }
+
 /* USER CODE END 4 */
 
 /**
@@ -403,6 +336,7 @@ int __io_putchar(int ch)
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
+  /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
   while (1)
   {
@@ -420,6 +354,8 @@ void Error_Handler(void)
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */
+  /* User can add his own implementation to report the file name and line number,
+     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
