@@ -1,0 +1,28 @@
+# STM32CubeIDE Build-Ordner
+**/Debug/
+**/Release/
+
+# Build-Artefakte
+**/*.elf
+**/*.bin
+**/*.hex
+**/*.map
+**/*.list
+
+# Eclipse Workspace (nicht Projekt!)
+.metadata/
+
+# Eclipse Indexer
+**/.settings/language.settings.xml
+
+# Temporäre Dateien
+*.tmp
+*.bak
+
+# Betriebssystem-Dateien
+.DS_Store
+Thumbs.db
+
+# Optional: Debug-Konfigurationen
+# **/*.launch
+
