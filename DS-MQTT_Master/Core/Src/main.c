@@ -146,7 +146,7 @@ int main(void)
 
       if (idleVorher && !idle)
       {
-          // Dieser Code laeuft bei JEDEM Verlassen des Idle-Zustands
+          // Dieser Code läuft bei JEDEM Verlassen des Idle-Zustands
           // Kompletter reset von allem:
 
           Ampel_Reset_After_Idle();
@@ -168,7 +168,7 @@ int main(void)
       else
       {
 
-        // Nach Idle zunaechst warten, damit die Red-Publishes verarbeitet werden
+        // Nach Idle zunächst warten, damit die Red-Publishes verarbeitet werden
         if (after_idle_pause_active)
         {
             if (HAL_GetTick() - after_idle_pause_start >= AFTER_IDLE_PAUSE_MS)
