@@ -86,38 +86,24 @@ static void mqtt_sub_request_cb(void *arg, err_t result)
     /* Subscribe fehlgeschlagen */
   // }
 
-	// Fuer Debug subscriber:
+	// Für Debug subscriber:
 
   if (result == ERR_OK)
       {
-          mqtt_publish(mqtt_client,
-                       "Debug/Sub",
-                       "sub_ok",
-                       strlen("sub_ok"),
-                       0,
-                       0,
-                       mqtt_pub_request_cb,
-                       NULL);
+          mqtt_publish(mqtt_client,"Debug/Sub","sub_ok", strlen("sub_ok"), 0, 0, mqtt_pub_request_cb, NULL);
       }
       else
       {
-          mqtt_publish(mqtt_client,
-                       "Debug/Sub",
-                       "sub_failed",
-                       strlen("sub_failed"),
-                       0,
-                       0,
-                       mqtt_pub_request_cb,
-                       NULL);
+          mqtt_publish(mqtt_client,"Debug/Sub","sub_failed", strlen("sub_failed"), 0, 0, mqtt_pub_request_cb, NULL);
       }
 }
 
 static void mqtt_incoming_publish_cb(void *arg, const char *topic, u32_t tot_len)
 {
   /* Diese Funktion wird aufgerufen, sobald eine neue Nachricht beginnt.
-     Hier kennst du Topic und Gesamtlaenge. */
+     Hier kennt man Topic und Gesamtlänge der message */
 	strncpy(current_topic, topic, sizeof(current_topic)-1); // Damit kein buffer overflow passiert, wird strncpy genutzt
-	current_topic[sizeof(current_topic)-1] = '\0';			// Fuegt ein \0 ein, damit string ordnungsgemaess endet
+	current_topic[sizeof(current_topic)-1] = '\0';			// Fügt ein \0 ein, damit string ordnungsgemaess endet
 
 	// Fuer Debug subscriber:
 	mqtt_publish(mqtt_client,"Debug/Topic",topic,strlen(topic),0,0,mqtt_pub_request_cb,NULL);
@@ -140,7 +126,7 @@ static void mqtt_incoming_publish_cb(void *arg, const char *topic, u32_t tot_len
 
 static void mqtt_incoming_data_cb(void *arg, const u8_t *data, u16_t len, u8_t flags)
 {
-  /* Diese Funktion enthaelt die eigentlichen Nutzdaten der MQTT-Nachricht. */
+  /* Diese Funktion enthält die eigentlichen Nutzdaten der MQTT-Nachricht. */
 
 	// Master verarbeitet sensor und button inputs und packt sie in die Liste:
 
@@ -167,7 +153,7 @@ static void mqtt_incoming_data_cb(void *arg, const u8_t *data, u16_t len, u8_t f
 	}
 }
 
-// Versende eigenen HEartbeat
+// Versende eigenen Heartbeat
 void MQTT_Custom_Heartbeat(void)
 {
 	if (mqtt_connected && (HAL_GetTick() - mqtt_last_publish > 500))
@@ -177,13 +163,13 @@ void MQTT_Custom_Heartbeat(void)
 	}
 }
 
-// wird ausgefuehrt, nachdem man seinen eigenen Heartbeat veroeffentlicht hat:
+// wird ausgefuehrt, nachdem man seinen eigenen Heartbeat veröffentlicht hat:
 static void mqtt_pub_request_cb_HeartbeatMaster(void *arg, err_t result)
 {
-  /* result == ERR_OK bedeutet: Publish wurde an lwIP/TCP uebergeben */
+  /* result == ERR_OK bedeutet: Publish wurde an lwIP/TCP übergeben */
 }
 
-// Empfange HEartbeats und "verarbeite" sie:
+// Empfange Heartbeats und "verarbeite" sie:
 void MQTT_Monitor_Heartbeats(void)
 {
 	uint32_t now = HAL_GetTick();
