@@ -15,7 +15,7 @@
 
 #define LED_COUNT 8
 
-// Fuer Die publish retry queue:
+// Für Die publish retry queue:
 #define RETRY_QUEUE_SIZE 16
 #define RETRY_INTERVAL_MS 20
 
