@@ -52,7 +52,7 @@ UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
 
-// Benoetigt um das Board blinken zu lassen, falls idle
+// Benötigt um das Board blinken zu lassen, falls idle
 static uint32_t last_blink = 0;
 
 uint8_t idleVorher;
