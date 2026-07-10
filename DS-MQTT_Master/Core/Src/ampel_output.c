@@ -24,7 +24,7 @@ static uint32_t last_retry_time = 0;
 
 static LedState color_to_state(const char *color);
 
-// Hilfs funktion fuer publish_led()
+// Hilfs funktion für publish_led()
 static LedState color_to_state(const char *color)
 {
     if (strcmp(color, "red") == 0)
@@ -42,19 +42,19 @@ static LedState color_to_state(const char *color)
 void publish_led(uint8_t led, const char *color)
 {
 
-	// Speichere die zu schickende farbe im aktuellen LED_State fuer diese Ampel:
+	// Speichere die zu schickende farbe im aktuellen LED_State für diese Ampel:
 	LedState new_state = color_to_state(color);
 
-	// Vergleiche ob es eine veraenderung des LED states gab:
+	// Vergleiche ob es eine veränderung des LED states gab:
 	if (last_led_state[led] == new_state)
 	{
-		return; // Zustand unveraendert, deshlab kein erneutes publish um den "publish" speicher zu schonen
+		return; // Zustand unverändert, deshlab kein erneutes publish um den "publish" speicher zu schonen
 	}
 
 	// Publishen der neuen states:
 	err_t err = mqtt_publish(mqtt_client, led_topics[led], color, strlen(color), 0, 0, mqtt_pub_request_cb, NULL);
 
-	// Wenn publish geglueckt, dann speichere den aktuellen LED state der aktuellen Ampel in last_led_state fuer die naechste abfrage
+	// Wenn publish geglückt, dann speichere den aktuellen LED state der aktuellen Ampel in last_led_state für die nächste abfrage
 	if (err == ERR_OK)
 	{
 		last_led_state[led] = new_state;
@@ -105,6 +105,6 @@ void process_publish_retries(void)
         }
         retry_count--;
 
-	// Falls err != ERR_OK wuerde die LED mit ihrer color in der rety queue bleiben und es wuerde nochmal nach 10 ms (RETRY-INERVAL) probiert werden
+	// Falls err != ERR_OK würde die LED mit ihrer color in der rety queue bleiben und es würde nochmal nach 10 ms (RETRY-INERVAL) probiert werden
     }
 }
