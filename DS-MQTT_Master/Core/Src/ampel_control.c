@@ -17,7 +17,7 @@ static uint32_t phase_start_time = 0;
 static const uint8_t state_green[ZUSTAND_ANZAHL][LED_COUNT] =
 {
 
-	/* Zustand "0"; Dummy Zeile weil Zustaende bei unserer Logik erst bei 1 beginnen */
+	/* Zustand "0"; Dummy Zeile weil Zustände bei unserer Logik erst bei 1 beginnen */
 	{0, 0, 0, 0, 0, 0, 0, 0},
 
     /* ZUSTAND_A  =1 */
@@ -62,7 +62,7 @@ void Ampel_Reset_After_Idle(void)
 		  }
 }
 
-// "Extrahiert" topic und gibt den zugehoerigen Zustand zurueck den das topic requesten wuerde, wenn es auf true gesetzt ist
+// "Extrahiert" topic und gibt den zugehörigen Zustand zurück den das topic requesten wuerde, wenn es auf true gesetzt ist
 uint8_t get_request_from_topic(const char *topic)
 {
     if (strcmp(topic, "Input/A/Sensor") == 0)
@@ -141,8 +141,8 @@ static void publish_green_state(Zustand z)
     }
 }
 
-// Nur LEDs die im aktuellen zustand gruen sind und im naechsten nicht mehr schalten auf orange
-// LEDs die im aktuellen und naechsten zustand gruen sind, bleiben gruen
+// Nur LEDs die im aktuellen zustand grün sind und im nächsten nicht mehr schalten auf orange
+// LEDs die im aktuellen und nächsten zustand gruen sind, bleiben grün
 static void publish_orange_transition(Zustand aktuell, Zustand next)
 {
     for (uint8_t i = 0; i < LED_COUNT; i++)
@@ -293,7 +293,7 @@ static Zustand calculate_next_state(void)
 	return ZUSTAND_A;
 }
 
-// Schaut ob in der RequestListe ueberhaupt was drinne steht. Wenn nein, dann den automatischen zyklus fortsetzten ( A->B->C )
+// Schaut ob in der RequestListe überhaupt was drinne steht. Wenn nein, dann den automatischen zyklus fortsetzten ( A->B->C )
 static int RequestListenCheck(void)
 {
 	if (RequestListe[0] == 0)
@@ -306,7 +306,7 @@ static int RequestListenCheck(void)
 	}
 }
 
-// Entfernt die aktuellste Request (von einem Button oder Sensor), damit dann die naechste Request nachruecken kann
+// Entfernt die aktuellste Request (von einem Button oder Sensor), damit dann die nächste Request nachrücken kann
 static void remove_first_request(void)
 {
     if (RequestListe[0] == 0)
@@ -340,7 +340,7 @@ void Ampel_zyklus(void)
 
             if (zustand == ZUSTAND_F1 || zustand == ZUSTAND_F2)		// Checken ob man sich in Zustand F1 oder F2 befeindet, den dann wird die orange phase geskippt
             {
-				if (now - phase_start_time >= FUSS_GREEN_TIME_MS)	// Fussgaenger haben andere zeiten als die normale ampeln
+				if (now - phase_start_time >= FUSS_GREEN_TIME_MS)	// Fussgänger haben andere zeiten als die normale ampeln
                 {
                     next_zustand = calculate_next_state();
 
@@ -391,7 +391,7 @@ void Ampel_zyklus(void)
                 publish_red_transition(zustand, next_zustand);
             }
 
-            if (zustand == ZUSTAND_F1 || zustand == ZUSTAND_F2)		// Wieder wie bei phase gruen checken, weil Fussgaengerampel andere zyklus dauern hat als die normalen ampeln
+            if (zustand == ZUSTAND_F1 || zustand == ZUSTAND_F2)		// Wieder wie bei phase grün checken, weil Fussgängerampel andere zyklus dauern hat als die normalen ampeln
             {
                 if (now - phase_start_time >= FUSS_RED_TIME_MS)
                 {
